@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Resume Player</string>
+    <string name="previous">|&lt;</string>
+    <string name="step_back">&lt;&lt;</string>
+    <string name="play">&gt;</string>
+    <string name="step_forward">&gt;&gt;</string>
+    <string name="next">&gt;|</string>
+    <string name="add">+</string>
+    <string name="remove">-</string>
+    <string name="blank">---</string>
+    <string name="start_time">00:00:00</string>
+    <string name="end_time">00:00:00</string>
+</resources>
