@@ -5,10 +5,10 @@ For example, you can listen to a radio podcast for a while, then an audiobook, a
 
 ## Usage
 
-Use the buttons '+' and '-' on the upper right corner to add or remove audio files from the player's list.  
+Use the button '+' to add audio files to the player's list.  
 The list shows the location, file name and progress for each audio file.  
-Select a file by pressing on the list. The selected item is highlighted.  
-The player will show the file name and the progress of the selected item.
+Select the file to play by pressing on the list. The selected item is highlighted.  
+The player will show the file name and the last progress of the selected item.
 
 Finally, press the button '>' to start playing.
 
@@ -29,6 +29,7 @@ The player stops playing automatically if the headphones are unplugged.
 
 When adding a file, the browsing location starts at the same folder as the selected file.  
 If the list is empty, the initial browsing location is the "Music" folder of the internal storage.
+To delete a file, select it from the list and press the '-' button on the upper right corner.
 
 ## Supported audio formats
 The supported audio formats are determined by the [Android platform's supported audio formats and codecs](https://developer.android.com/guide/topics/media/media-formats#audio-codecs).
@@ -39,9 +40,10 @@ For example, it can play MP3, MP4, WAV or Ogg but not WMA.
 This app requires storage read/write permissions in order to browse for audio files and store the audio list.
 
 ## Build Environment
-Developed in Android Studio 3.1.4 on Windows.  
-Gradle version: 4.4.  
-Min/Target Sdk Version: API 23 (Marshmallow)  
+Developed with Android Studio 3.2.1 on Windows.  
+Gradle version: 4.6.  
+Min Sdk Version: API 23 (Android 6.0 / Marshmallow)
+Target Sdk Version: API 26 (Android 8.0 / Oreo)
 
 ## Install
 A debug and unsigned APK can be downloaded from [here](/release/ResumePlayer.apk).  

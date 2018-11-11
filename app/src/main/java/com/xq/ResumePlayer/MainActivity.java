@@ -91,18 +91,18 @@ public class MainActivity extends AppCompatActivity {
         getWindow().getDecorView().setBackgroundColor(Color.BLACK);
 
         // Initialize controls
-        itemListLayout = (LinearLayout)findViewById(R.id.audioList);
-        btPrevious = (Button) findViewById(R.id.btPrevious);
-        btStepBack = (Button) findViewById(R.id.btStepBack);
-        btPlay=(Button)findViewById(R.id.btPlay);
-        btStepForward=(Button)findViewById(R.id.btStepForward);
-        btNext = (Button) findViewById(R.id.btNext);
-        btAdd = (Button)findViewById(R.id.btAdd);
-        btRemove = (Button)findViewById(R.id.btRemove);
-        txtElapsed =(TextView)findViewById(R.id.textElapsed);
-        txtDuration =(TextView)findViewById(R.id.textDuration);
-        txtFileName =(TextView)findViewById(R.id.textAudioName);
-        seekbar=(SeekBar)findViewById(R.id.seekBar);
+        itemListLayout = findViewById(R.id.audioList);
+        btPrevious = findViewById(R.id.btPrevious);
+        btStepBack = findViewById(R.id.btStepBack);
+        btPlay = findViewById(R.id.btPlay);
+        btStepForward = findViewById(R.id.btStepForward);
+        btNext = findViewById(R.id.btNext);
+        btAdd = findViewById(R.id.btAdd);
+        btRemove = findViewById(R.id.btRemove);
+        txtElapsed = findViewById(R.id.textElapsed);
+        txtDuration = findViewById(R.id.textDuration);
+        txtFileName = findViewById(R.id.textAudioName);
+        seekbar = findViewById(R.id.seekBar);
 
         // Configure controls
         txtElapsed.setTextColor(Color.WHITE);

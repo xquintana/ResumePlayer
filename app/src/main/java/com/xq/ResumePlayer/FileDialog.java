@@ -14,7 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /** Allows to browse and select an audio file from storage. */
-public class FileDialog {
+class FileDialog {
     private static final String PARENT_DIR = "..";
     private final Activity activity; // The main activity
     private File currentPath; // Current browsing location
@@ -65,7 +65,7 @@ public class FileDialog {
     }
 
     /** Creates and displays the dialog */
-    public void showDialog() {
+    void showDialog() {
         createFileDialog().show();
     }
 
