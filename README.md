@@ -1,54 +1,51 @@
-# ResumePlayer
+# Resume Player
 
-An audio player for Android that keeps track of the progress of a list of files so they can be resumed at any time.  
-For example, you can listen to a radio podcast for a while, then an audiobook, and later on resume the podcast where you left it.
+**Resume Player** is a simple Android audio player that remembers playback progress for each file, so you can resume listening at any time.  
+For example, you can listen to a song, then an audiobook, and later return to the song right where you left off.
 
 ## Usage
 
-Use the button '+' to add audio files to the player's list.  
-The list shows the location, file name and progress for each audio file.  
-Select the file to play by pressing on the list. The selected item is highlighted.  
-The player will show the file name and the last progress of the selected item.
-
-Finally, press the button '>' to start playing.
+Use the **+** button in the top-right corner to add audio files to the list.  
+The list shows each file’s location, name, and playback progress.  
+Select a file in the list to play it (the selected file will be highlighted), then press **>** to start playback.  
 
 ![Screenshot](/screenshot.png)
 
 ### Controls
 
-* **|<** Select previous audio file in the current folder.
-* **<<** Jump 5 seconds backwards.
-* **>** Play selected audio file.
-* **||** Pause selected audio file.
-* **>>** Jump 5 seconds forward.
-* **>|** Select next audio file in the current folder.
+*   **`+` / `-`** : Add or remove audio files from your list.  
+*   **BOOST ON/OFF** : Toggle audio amplification.  
+*   **`|<` / `>|`** : Skip to the previous or next file in the current folder.  
+*   **`<<` / `>>`** : Jump 5 seconds backward or forward.  
+*   **`>` / `||`** : Play or Pause the selected file.  
 
-The files in the list are sorted so the latest played file is shown first.  
-If a file does not exist anymore or it cannot be played for some reason, it is shown in red.  
-The player stops playing automatically if the headphones are unplugged.  
+The most recently played audio file appears at the top of the list.  
+If a file no longer exists or cannot be played, it is shown in red.  
+The player stops automatically if the headphones are unplugged.  
 
-When adding a file, the browsing location starts at the same folder as the selected file.  
-If the list is empty, the initial browsing location is the "Music" folder of the internal storage.
-To delete a file, select it from the list and press the '-' button on the upper right corner.
-
-## Supported audio formats
-The supported audio formats are determined by the [Android platform's supported audio formats and codecs](https://developer.android.com/guide/topics/media/media-formats#audio-codecs).
-
-For example, it can play MP3, MP4, WAV or Ogg but not WMA.
+When adding a file, browsing starts in the same folder as the selected file.  
 
 ## Permissions
-This app requires storage read/write permissions in order to browse for audio files and store the audio list.
 
-## Build Environment
-Developed with Android Studio 3.2.1 on Windows.  
-Gradle version: 4.6.  
-Min Sdk Version: API 23 (Android 6.0 / Marshmallow)
-Target Sdk Version: API 26 (Android 8.0 / Oreo)
+This app requires access to your device’s storage to find and play audio files.
+
+* On Android 13 and newer, the system will ask for access to audio files only.  
+* On older Android versions, the system may ask for access to "photos and media files". This is a broader, older permission, but the app uses it only to read audio files.  
+
+No personal data is collected or modified. Access is used strictly for browsing and playing audio files stored on your device.  
+
+## App Details
+
+* **App name / ID:** com.xq.ResumePlayer
+* **Version:** 2.0
+* **Minimum Android version:** Android 6.0 (Marshmallow) — API 23
+* **Target Android version:** Android 13.0 (Tiramisu) — API 33
+* **Build SDK:** Android 14.0 (Upside Down Cake) — API 34
 
 ## Install
-A debug and unsigned APK can be downloaded from [here](/release/ResumePlayer.apk).  
-You will need to temporary check the option "Unknown Sources" in Android's security settings.  
+A debug, unsigned APK can be downloaded from the [Releases section](./releases).   
+You will need to temporarily enable the *Unknown Sources* option in Android's security settings.  
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.  

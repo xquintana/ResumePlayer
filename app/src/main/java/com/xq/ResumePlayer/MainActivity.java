@@ -1,23 +1,21 @@
 package com.xq.ResumePlayer;
 
-import android.app.AlertDialog;
-import android.content.DialogInterface;
+import android.Manifest;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.Manifest;
 import android.media.MediaMetadataRetriever;
-import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
+import android.os.IBinder;
+import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -26,40 +24,63 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.activity.OnBackPressedCallback;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.Locale;
-
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int REQUEST_READWRITE_STORAGE = 0;
+    private static final int REQUEST_STORAGE_PERMISSION = 100;
 
-    private String  dataFileName = "ResumePlayer.txt"; // The file where the audio list is stored
-    private List<Item> itemList = new ArrayList<>(); // The player's audio list
-    private Item selectedItem; // Selected audio file
-    private FileDialog addFileDialog; // Dialog used to add a new audio item to the list
-    private Handler myHandler = new Handler(); // Used to update the progress of the current audio file
-    private HeadphoneReceiver receiver; // Used to detect when the headphone is unplugged
-    private boolean playing = false; // Indicates whether the app is currently playing audio
-    private int stepTime = 5000; // Number of milliseconds to jump forward or backward
+    private final String dataFileName = "ResumePlayer.txt";
+    private final List<Item> itemList = new ArrayList<>();
+    private Item selectedItem;
+    private FileDialog addFileDialog;
+    private final Handler myHandler = new Handler(Looper.getMainLooper());
+    private HeadphoneReceiver receiver;
+    private boolean playing = false;
+    private final int stepTime = 5000;
 
-    // Controls
     private TextView txtElapsed, txtDuration, txtFileName;
-    private Button   btPrevious, btStepBack, btPlay, btStepForward, btNext, btAdd, btRemove;
+    private Button   btPrevious, btStepBack, btPlay, btStepForward, btNext, btAdd, btRemove, btBoost;
     private SeekBar  seekbar;
-    private LinearLayout itemListLayout; // The audio list layout, containing a layout for each item
-    private MediaPlayer  mediaPlayer;
+    private LinearLayout itemListLayout;
+    
+    private PlaybackService playbackService;
+    private boolean isBound = false;
+    private boolean boostEnabled = false;
 
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            PlaybackService.LocalBinder binder = (PlaybackService.LocalBinder) service;
+            playbackService = binder.getService();
+            isBound = true;
+            playbackService.setPlaybackCompletionListener(() -> myHandler.post(() -> selectNextItem()));
+            syncWithService();
+        }
 
-    /** Represents an audio file, containing information about the path and its playing state. */
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            isBound = false;
+            playbackService = null;
+        }
+    };
+
     private class Item {
         Item() {}
         Item(String file, String folder, long timestamp)
@@ -71,13 +92,11 @@ public class MainActivity extends AppCompatActivity {
             duration = getDuration(folder, file);
             exists = true;
         }
-        // Serialized variables
         String folder;
         String file;
         int elapsed;
         int duration;
-        long timestamp; // Used to sort items by the last time they were played
-        // Non-serialized variables
+        long timestamp;
         boolean exists;
         TextView txtFolder;
         TextView txtFile;
@@ -90,7 +109,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         getWindow().getDecorView().setBackgroundColor(Color.BLACK);
 
-        // Initialize controls
         itemListLayout = findViewById(R.id.audioList);
         btPrevious = findViewById(R.id.btPrevious);
         btStepBack = findViewById(R.id.btStepBack);
@@ -99,129 +117,203 @@ public class MainActivity extends AppCompatActivity {
         btNext = findViewById(R.id.btNext);
         btAdd = findViewById(R.id.btAdd);
         btRemove = findViewById(R.id.btRemove);
+        btBoost = findViewById(R.id.btBoost);
         txtElapsed = findViewById(R.id.textElapsed);
         txtDuration = findViewById(R.id.textDuration);
         txtFileName = findViewById(R.id.textAudioName);
         seekbar = findViewById(R.id.seekBar);
 
-        // Configure controls
         txtElapsed.setTextColor(Color.WHITE);
         txtDuration.setTextColor(Color.WHITE);
         txtFileName.setTextColor(Color.WHITE);
         seekbar.setClickable(false);
 
-        // Handle the UI events
         setListeners();
 
-        // Handle the headphone disconnection event
         receiver = new HeadphoneReceiver();
         IntentFilter receiverFilter = new IntentFilter(Intent.ACTION_HEADSET_PLUG);
-        registerReceiver(receiver, receiverFilter);
+        ContextCompat.registerReceiver(this, receiver, receiverFilter, ContextCompat.RECEIVER_EXPORTED);
 
-        // Load data from file
         loadItemList();
-
-        // Display audio list
         updateListView();
 
-        // Check Read/Write permissions
-        int permissionCheckRead = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE);
-        int permissionCheckWrite = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
-        if (permissionCheckRead != PackageManager.PERMISSION_GRANTED || permissionCheckWrite != PackageManager.PERMISSION_GRANTED) {
-            showControls(false);
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                            Manifest.permission.READ_EXTERNAL_STORAGE},
-                    REQUEST_READWRITE_STORAGE);
-        }
-        else showControls(true);
+        checkPermissions();
+
+        Intent intent = new Intent(this, PlaybackService.class);
+        startService(intent);
+        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                try {
+                    unregisterReceiver(receiver);
+                } catch (Exception ignored) {}
+                finish();
+            }
+        });
     }
 
-    /** Handles the events of the buttons and the seek bar */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        syncWithService();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (isBound && playbackService != null && selectedItem != null) {
+            selectedItem.elapsed = playbackService.getCurrentPosition();
+            saveItemList();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (isBound) {
+            unbindService(serviceConnection);
+            isBound = false;
+        }
+        myHandler.removeCallbacks(updateProgress);
+        super.onDestroy();
+    }
+
+    private void syncWithService() {
+        if (playbackService != null) {
+            String servicePath = playbackService.getCurrentPath();
+            if (servicePath != null) {
+                // If service is playing/prepared for something else, sync our selection
+                if (selectedItem == null || !makeFullPath(selectedItem.folder, selectedItem.file).equals(servicePath)) {
+                    for (Item item : itemList) {
+                        if (makeFullPath(item.folder, item.file).equals(servicePath)) {
+                            selectedItem = item;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (playbackService.isPlaying()) {
+                playing = true;
+                if (selectedItem != null) {
+                    txtFileName.setText(selectedItem.file);
+                    txtDuration.setText(getFormattedTime(playbackService.getDuration()));
+                    seekbar.setMax(playbackService.getDuration());
+                }
+                enablePlayerButtons(true);
+                myHandler.removeCallbacks(updateProgress);
+                myHandler.post(updateProgress);
+                updateListView();
+            } else if (selectedItem != null) {
+                playing = false;
+                enablePlayerButtons(true);
+                updateUIFromSelectedItem();
+                String fullPath = makeFullPath(selectedItem.folder, selectedItem.file);
+                if (checkFileExists(fullPath) && servicePath == null) {
+                    playbackService.prepare(fullPath, selectedItem.elapsed, boostEnabled);
+                }
+            }
+        }
+    }
+
+    private void updateUIFromSelectedItem() {
+        if (selectedItem == null) return;
+        txtFileName.setText(selectedItem.file);
+        txtElapsed.setText(getFormattedTime(selectedItem.elapsed));
+        txtDuration.setText(getFormattedTime(selectedItem.duration));
+        seekbar.setMax(selectedItem.duration);
+        seekbar.setProgress(selectedItem.elapsed);
+        updateListView();
+    }
+
+    private void checkPermissions() {
+        if (Utils.isAndroid13orHigher()) {
+            // Android 13+ (API 33+)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                showControls(false);
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_MEDIA_AUDIO}, REQUEST_STORAGE_PERMISSION);
+            } else {
+                showControls(true);
+            }
+        } else {
+            // Android 12 and below (API 32 and below)
+            // We only need READ_EXTERNAL_STORAGE to play files. Internal storage (getFilesDir) needs no permission.
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                showControls(false);
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_STORAGE_PERMISSION);
+            } else {
+                showControls(true);
+            }
+        }
+    }
+
     private void setListeners() {
-        btPlay.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (!playing) play();
-                else pause();
+        btPlay.setOnClickListener(v -> {
+            if (!playing) play();
+            else pause();
+        });
+        btStepBack.setOnClickListener(v -> {
+            if (selectedItem != null && playbackService != null) {
+                int currentPos = playbackService.getCurrentPosition();
+                int target = Math.max(currentPos - stepTime, 0);
+                playbackService.seekTo(target);
+                selectedItem.elapsed = target;
+                txtElapsed.setText(getFormattedTime(target));
+                seekbar.setProgress(target);
             }
         });
-        btStepBack.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if ((selectedItem.elapsed - stepTime) > 0) {
-                    mediaPlayer.seekTo(selectedItem.elapsed - stepTime);
-                }
+        btStepForward.setOnClickListener(v -> {
+            if (selectedItem != null && playbackService != null) {
+                int currentPos = playbackService.getCurrentPosition();
+                int target = Math.min(currentPos + stepTime, selectedItem.duration);
+                playbackService.seekTo(target);
+                selectedItem.elapsed = target;
+                txtElapsed.setText(getFormattedTime(target));
+                seekbar.setProgress(target);
             }
         });
-        btStepForward.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if ((selectedItem.elapsed + stepTime) <= selectedItem.duration) {
-                    mediaPlayer.seekTo(selectedItem.elapsed + stepTime);
-                }
+        btNext.setOnClickListener(v -> selectNextItem());
+        btPrevious.setOnClickListener(v -> selectPreviousItem());
+        btAdd.setOnClickListener(v -> {
+            try {
+                String initialPath;
+                if (selectedItem != null) initialPath = selectedItem.folder;
+                else initialPath = Environment.getExternalStorageDirectory().toString() + "/Music";
+                addFileDialog = new FileDialog(MainActivity.this, new File(initialPath));
             }
-        });
-        btNext.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                selectNextItem();
+            catch (Exception e){
+                Toast.makeText(getApplicationContext(), "Cannot set root path", Toast.LENGTH_SHORT).show();
+                return;
             }
-        });
-        btPrevious.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                selectPreviousItem();
-            }
-        });
-        btAdd.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                try {
-                    String initialPath;
-                    if (selectedItem != null) initialPath = selectedItem.folder;
-                    else initialPath = Environment.getExternalStorageDirectory().toString() + "/Music";
-                    addFileDialog = new FileDialog(MainActivity.this, new File(initialPath));
-                }
-                catch (Exception e){
-                    Toast.makeText(getApplicationContext(), "Cannot set root path", Toast.LENGTH_SHORT).show();
+            addFileDialog.addFileListener(obj -> {
+                String fullPath = obj.toString();
+                String file = new File(fullPath).getName();
+                String folder = extractFolder(fullPath);
+                if (!isValidAudio(folder, file)) {
+                    Toast.makeText(MainActivity.this, "This file cannot be played", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                addFileDialog.addFileListener(new FileDialog.FileSelectedListener() {
-                    public void fileSelected(File obj) {
-                        String fullPath = obj.toString();
-                        String file = new File(fullPath).getName();
-                        String folder = extractFolder(fullPath);
-                        if (!isValidAudio(folder, file)) {
-                            Toast.makeText(MainActivity.this, "This file cannot be played", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        Item item = new Item(file, folder, getTimeStamp());
-                        itemList.add(item);
-                        selectItem(item);
+                Item item = new Item(file, folder, getTimeStamp());
+                itemList.add(item);
+                selectItem(item);
+                updateListView();
+            });
+            addFileDialog.showDialog();
+        });
+        btRemove.setOnClickListener(v -> {
+            if (selectedItem == null) return;
+            new AlertDialog.Builder(MainActivity.this, R.style.AlertDialogTheme)
+                    .setTitle(selectedItem.folder)
+                    .setMessage(selectedItem.file + "\r\n\r\n" + "Remove from list?")
+                    .setNegativeButton(R.string.no, null)
+                    .setPositiveButton(R.string.yes, (arg0, arg1) -> {
+                        itemList.remove(selectedItem);
+                        selectItem(itemList.isEmpty() ? null : itemList.get(0));
                         updateListView();
-                    }
-                });
-                addFileDialog.showDialog();
-            }
+                    }).create().show();
         });
-        btRemove.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (selectedItem == null) return;
-                new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("Remove from list?")
-                        .setMessage("File: " + selectedItem.file + "\r\n\r\nFolder: " + selectedItem.folder )
-                        .setNegativeButton(android.R.string.no, null)
-                        .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface arg0, int arg1) {
-                                itemList.remove(selectedItem);
-                                selectItem(itemList.isEmpty() ? null : itemList.get(0));
-                                updateListView();
-                            }
-                        }).create().show();
-            }
-        });
+        btBoost.setOnClickListener(v -> toggleBoost());
         seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {}
@@ -229,32 +321,45 @@ public class MainActivity extends AppCompatActivity {
             public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser && progress > 0) {
-                    mediaPlayer.seekTo(progress);
+                if (fromUser && progress > 0 && playbackService != null) {
+                    playbackService.seekTo(progress);
                     if (!playing) txtElapsed.setText(getFormattedTime(progress));
                 }
             }
         });
     }
 
-    /** Shows or hides the controls */
+    private void toggleBoost() {
+        boostEnabled = !boostEnabled;
+        btBoost.setText(boostEnabled ? R.string.boost_on : R.string.boost_off);
+        btBoost.setTextColor(boostEnabled ? Color.GREEN : Color.WHITE);
+        if (playbackService != null) {
+            playbackService.setBoost(boostEnabled);
+        }
+    }
+
     private void showControls(boolean enable) {
-        int value = enable ? View.VISIBLE : View.INVISIBLE;
+        int value = enable ? View.VISIBLE : View.GONE;
         itemListLayout.setVisibility(value);
         btPrevious.setVisibility(value);
         btStepBack.setVisibility(value);
         btPlay.setVisibility(value);
         btStepForward.setVisibility(value);
         btNext.setVisibility(value);
-        btAdd.setVisibility(value);
-        btRemove.setVisibility(value);
+        btAdd.setVisibility(View.VISIBLE);
+        btRemove.setVisibility(View.VISIBLE);
+        btBoost.setVisibility(value);
         txtElapsed.setVisibility(value);
         txtDuration.setVisibility(value);
         txtFileName.setVisibility(value);
         seekbar.setVisibility(value);
+
+        View controls = findViewById(R.id.controls);
+        if (controls != null) controls.setVisibility(value);
+        View playbackInfo = findViewById(R.id.playbackInfo);
+        if (playbackInfo != null) playbackInfo.setVisibility(value);
     }
 
-    /** Enables or disables the player buttons. */
     private void enablePlayerButtons(boolean enable){
         btPrevious.setEnabled(enable);
         btStepBack.setEnabled(enable);
@@ -265,7 +370,6 @@ public class MainActivity extends AppCompatActivity {
         btPlay.setText(playing ? "||" : ">");
     }
 
-    /** Loads the audio item list from storage */
     private void loadItemList() {
         itemList.clear();
         selectedItem = null;
@@ -273,60 +377,54 @@ public class MainActivity extends AppCompatActivity {
 
         File dataFile = new File(getFilesDir(), dataFileName);
 
-        if (!checkFileExists(dataFile.getAbsolutePath())) {
-            saveItemList(); // Create empty file
+        if (!dataFile.exists()) {
+            saveItemList();
             return;
         }
 
-        try {
-            FileReader reader = new FileReader(dataFile);
-            BufferedReader br = new BufferedReader(reader);
+        try (FileReader reader = new FileReader(dataFile);
+             BufferedReader br = new BufferedReader(reader)) {
             String line, path;
 
             while ((line = br.readLine()) != null) {
                 Item audioInfo = new Item();
                 audioInfo.folder = line;
 
-                // Read audio file name
                 if ((line = br.readLine()) == null) break;
                 audioInfo.file = line;
 
-                // Read elapsed time
                 if ((line = br.readLine()) == null) break;
                 try {
                     audioInfo.elapsed = Integer.parseInt(line);
-                } catch(NumberFormatException nfe) {
-                    System.out.println("Could not parse " + nfe);
-                }
+                } catch(NumberFormatException ignored) {}
 
-                // Read duration
                 if ((line = br.readLine()) == null) break;
                 try {
                     audioInfo.duration = Integer.parseInt(line);
-                } catch(NumberFormatException nfe) {
-                    System.out.println("Could not parse " + nfe);
-                }
+                } catch(NumberFormatException ignored) {}
 
-                // Read timestamp (used for sorting)
                 if ((line = br.readLine()) == null) break;
                 try {
                     audioInfo.timestamp = Long.parseLong(line);
-                } catch(NumberFormatException nfe) {
-                    System.out.println("Could not parse " + nfe);
+                } catch(NumberFormatException ignored) {}
+
+                path = makeFullPath(audioInfo.folder, audioInfo.file);
+                
+                // Check if the service saved a more recent position due to onTaskRemoved
+                int savedPos = getSharedPreferences("ResumePlayerPrefs", Context.MODE_PRIVATE).getInt(path, -1);
+                if (savedPos != -1) {
+                    audioInfo.elapsed = savedPos;
+                    getSharedPreferences("ResumePlayerPrefs", Context.MODE_PRIVATE).edit().remove(path).apply();
                 }
 
-                // Check that the file exists
-                path = makeFullPath(audioInfo.folder, audioInfo.file);
                 audioInfo.exists = checkFileExists(path);
                 if (!audioInfo.exists) numErrors++;
 
-                // Add the audio item to the player list
                 itemList.add(audioInfo);
             }
-            reader.close();
             selectItem(itemList.isEmpty() ? null : itemList.get(0));
             if (numErrors > 0) {
-                Toast.makeText(MainActivity.this, String.valueOf(numErrors) + " file(s) not found", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, numErrors + " file(s) not found", Toast.LENGTH_SHORT).show();
             }
         }
         catch(IOException e) {
@@ -334,56 +432,41 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Stores the audio item list */
     private void saveItemList(){
         File dataFile = new File(getFilesDir(), dataFileName);
-        try {
-            FileWriter writer = new FileWriter(dataFile, false);
+        try (FileWriter writer = new FileWriter(dataFile, false)) {
             for (int i = 0; i < itemList.size(); i++) {
                 Item audioInfo = itemList.get(i);
                 writer.write(audioInfo.folder + "\r\n");
                 writer.write(audioInfo.file + "\r\n");
-                writer.write(String.valueOf(audioInfo.elapsed) + "\r\n");
-                writer.write(String.valueOf(audioInfo.duration) + "\r\n");
-                writer.write(String.valueOf(audioInfo.timestamp) + "\r\n");
+                writer.write(audioInfo.elapsed + "\r\n");
+                writer.write(audioInfo.duration + "\r\n");
+                writer.write(audioInfo.timestamp + "\r\n");
             }
             writer.flush();
-            writer.close();
         }
         catch(IOException e) {
             Toast.makeText(getApplicationContext(), "Cannot save file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
-    /** Updates the audio item list, showing most recent first */
     private void updateListView(){
         if (itemListLayout == null) return;
 
-        // Sort the audio items in order of access time (latest first)
-        Collections.sort(itemList,
-                new Comparator<Item>() {
-                    public int compare(Item obj1, Item obj2) {
-                        return Long.compare(obj2.timestamp, obj1.timestamp);
-                    }
-                });
+        Collections.sort(itemList, (obj1, obj2) -> Long.compare(obj2.timestamp, obj1.timestamp));
 
-        // Add the audio items to the list layout
         itemListLayout.removeAllViews();
         for(int i = 0; i < itemList.size(); i++)
             addItemToListView(itemList.get(i));
 
-        // Update file
         saveItemList();
     }
 
-    /** Adds a section in the item list view that shows information about an item */
     private void addItemToListView(Item item){
-        // Create a layout to render the item's information
         LinearLayout itemLayout = new LinearLayout(MainActivity.this);
         itemLayout.setOrientation(LinearLayout.VERTICAL);
         itemLayout.setId(itemListLayout.getChildCount());
 
-        // Add the line that separates items
         ImageView separator = new ImageView(MainActivity.this);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1);
         params.setMargins(0, 10, 0, 10);
@@ -391,19 +474,16 @@ public class MainActivity extends AppCompatActivity {
         separator.setBackgroundColor(Color.LTGRAY);
         itemLayout.addView(separator);
 
-        // Add item's folder
         TextView txtFolder = new TextView(MainActivity.this);
         txtFolder.setText(removeRootFolder(item.folder));
         itemLayout.addView(txtFolder);
         item.txtFolder = txtFolder;
 
-        // Add item's file name
         TextView txtFile = new TextView(MainActivity.this);
         txtFile.setText(item.file);
         itemLayout.addView(txtFile);
         item.txtFile = txtFile;
 
-        // Add item's play progress
         if (item.exists) {
             TextView txtProgress = new TextView(MainActivity.this);
             txtProgress.setText(getProgressInfo(item));
@@ -411,25 +491,16 @@ public class MainActivity extends AppCompatActivity {
             item.txtProgress = txtProgress;
         }
 
-        // The selected item will show highlighted
         setItemAppearance(item, item == selectedItem);
 
-        // When the layout is clicked, the associated item is selected
-        itemLayout.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) { selectItem(itemList.get(v.getId())); }
-        });
+        itemLayout.setOnClickListener(v -> selectItem(itemList.get(v.getId())));
 
-        // Add the item's layout to the list layout
         itemListLayout.addView(itemLayout);
     }
 
-    /** Sets the color scheme of an item in the list */
     private void setItemAppearance(Item item, boolean highlight){
         int colorFolder, colorFile, colorTime;
-
         if (item == null) return;
-
         if (highlight) {
             if (item.exists) {
                 colorFolder = Color.rgb(255, 145, 0);
@@ -460,26 +531,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Used to show something in case an item cannot be selected. */
     private void showDummyItemInfo(){
         txtFileName.setText(R.string.blank);
         txtElapsed.setText(getFormattedTime(0));
         txtDuration.setText(getFormattedTime(0));
         seekbar.setProgress(0);
-        releasePlayer();
+        playing = false;
         enablePlayerButtons(false);
     }
 
-    /** Sets the current audio item and initializes the Media Player.
-     * Called when the user clicks on an item of the audio list. */
     private void selectItem(Item item){
-        releasePlayer();
+        if (item != null && item == selectedItem && playing) {
+            return;
+        }
+
+        playing = false;
         enablePlayerButtons(false);
-
-        // Remove highlight on current audio item
         setItemAppearance(selectedItem, false);
-
-        // Set new audio item as the current one
         selectedItem = item;
         if (selectedItem == null) {
             showDummyItemInfo();
@@ -489,25 +557,25 @@ public class MainActivity extends AppCompatActivity {
         try {
             String fullPath = makeFullPath(selectedItem.folder, selectedItem.file);
             if (checkFileExists(fullPath)) {
-                mediaPlayer = MediaPlayer.create(MainActivity.this, Uri.parse(fullPath));
-                if (mediaPlayer != null) {
-                    if (selectedItem.elapsed >= selectedItem.duration) {
-                        selectedItem.elapsed = 0;
-                    }
-                    txtFileName.setText(selectedItem.file);
-                    txtElapsed.setText(getFormattedTime(selectedItem.elapsed));
-                    txtDuration.setText(getFormattedTime(selectedItem.duration));
-                    mediaPlayer.seekTo(selectedItem.elapsed);
-                    seekbar.setMax(selectedItem.duration);
-                    seekbar.setProgress(selectedItem.elapsed);
-                    enablePlayerButtons(true);
-                    mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                        public void onCompletion(MediaPlayer mp) {
-                            selectNextItem();
-                        }
-                    });
+                if (selectedItem.elapsed >= selectedItem.duration) {
+                    selectedItem.elapsed = 0;
                 }
-                else throw new Exception("Media Player failed to load file");
+                txtFileName.setText(selectedItem.file);
+                txtElapsed.setText(getFormattedTime(selectedItem.elapsed));
+                txtDuration.setText(getFormattedTime(selectedItem.duration));
+                seekbar.setMax(selectedItem.duration);
+                seekbar.setProgress(selectedItem.elapsed);
+                enablePlayerButtons(true);
+
+                if (playbackService != null) {
+                    playbackService.prepare(fullPath, selectedItem.elapsed, boostEnabled);
+                    int actualDuration = playbackService.getDuration();
+                    if (actualDuration > 0) {
+                        selectedItem.duration = actualDuration;
+                        txtDuration.setText(getFormattedTime(selectedItem.duration));
+                        seekbar.setMax(selectedItem.duration);
+                    }
+                }
             }
             else
             {
@@ -526,60 +594,57 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Selects the next audio file found in the current folder */
-    private void selectNextItem() {
-        Item nextFile = getNextItem(selectedItem);
-        if (nextFile != null) {
-            replaceSelectedItem(nextFile);
-        }
-        else {
-            selectedItem.elapsed = 0;
-            selectItem(selectedItem);
-            Toast.makeText(MainActivity.this, "No more files in folder", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /** Returns the audio file that follows the current audio in the same folder (null if not found) */
-    private Item getNextItem(Item audioInfo){
+    private Item getNextItem(Item audioInfo, boolean reverse){
         if (audioInfo == null) return null;
-        File file[] = new File(audioInfo.folder).listFiles();
+        File[] files = new File(audioInfo.folder).listFiles();
         boolean foundCurFile = false;
-        for (File aFile : file) {
-            if (foundCurFile && isValidAudio(audioInfo.folder,  aFile.getName())) {
-                return new Item(aFile.getName(), audioInfo.folder, audioInfo.timestamp);
+        if (files != null) {
+            Arrays.sort(files, (f1, f2) -> {
+                int res = f1.getName().compareToIgnoreCase(f2.getName());
+                return reverse ? -res : res;
+            });
+            for (File file : files) {
+                if (foundCurFile && isValidAudio(audioInfo.folder, file.getName())) {
+                    return new Item(file.getName(), audioInfo.folder, audioInfo.timestamp);
+                }
+                if (file.getName().equals(audioInfo.file)) foundCurFile = true;
             }
-            if (aFile.getName().equals(audioInfo.file)) foundCurFile = true;
-        }
-        return null; // The current audio was the last file in the current folder
-    }
-
-    /** Selects the previous audio file found in the current folder */
-    private void selectPreviousItem() {
-        Item prevFile = getPreviousItem(selectedItem);
-        if (prevFile != null) {
-            replaceSelectedItem(prevFile);
-        }
-        else {
-            Toast.makeText(MainActivity.this, "Already the first file in folder", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /** Returns the audio file that precedes the current audio in the same folder (null if not found) */
-    private Item getPreviousItem(Item item){
-        if (item == null) return null;
-        String prevFileName = null;
-        File file[] = new File(item.folder).listFiles();
-        for (File aFile : file) {
-            if (aFile.getName().equals(item.file)) {
-                if (prevFileName == null) return null;
-                return new Item(prevFileName, item.folder, item.timestamp);
-            }
-            if (isValidAudio(item.folder,  aFile.getName())) prevFileName = aFile.getName();
         }
         return null;
     }
 
-    /** Replaces the selected audio item with another item */
+    private void selectNextItem() {
+        Item nextFile = getNextItem(selectedItem, false);
+        if (nextFile != null) {
+            replaceSelectedItem(nextFile);
+        }
+        else {
+            if (selectedItem != null) {
+                selectedItem.elapsed = 0;
+                playing = false;
+                selectItem(selectedItem);
+                updateListView();
+            }
+            Toast.makeText(MainActivity.this, "No more files in folder", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void selectPreviousItem() {
+        Item prevFile = getNextItem(selectedItem, true);
+        if (prevFile != null) {
+            replaceSelectedItem(prevFile);
+        }
+        else {
+            if (selectedItem != null) {
+                selectedItem.elapsed = 0;
+                playing = false;
+                selectItem(selectedItem);
+                updateListView();
+            }
+            Toast.makeText(MainActivity.this, "Already the first file in folder", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void replaceSelectedItem(Item item) {
         if (item != null) {
             boolean wasPlaying = playing;
@@ -594,19 +659,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Plays the selected audio item */
     private void play() {
-        if (mediaPlayer == null || selectedItem == null) {
+        if (selectedItem == null || playbackService == null) {
             Toast.makeText(getApplicationContext(), "Cannot play: player not initialized", Toast.LENGTH_SHORT).show();
             return;
         }
         try {
-            mediaPlayer.start();
+            playbackService.play(selectedItem.file);
             selectedItem.timestamp = getTimeStamp();
-            selectedItem.elapsed = mediaPlayer.getCurrentPosition();
-            selectedItem.duration = mediaPlayer.getDuration();
+            selectedItem.duration = playbackService.getDuration();
+            selectedItem.elapsed = Math.min(playbackService.getCurrentPosition(), selectedItem.duration);
             txtDuration.setText(getFormattedTime(selectedItem.duration));
             txtElapsed.setText(getFormattedTime(selectedItem.elapsed));
+            myHandler.removeCallbacks(updateProgress);
             myHandler.postDelayed(updateProgress, 100);
             playing = true;
             enablePlayerButtons(true);
@@ -617,56 +682,38 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Pauses the selected audio item.
-     * It can also be called from class HeadphoneReceiver */
-    void pause() {
-        if (mediaPlayer == null || selectedItem == null) return;
-        mediaPlayer.pause();
+    public void pause() {
+        if (playbackService == null || selectedItem == null) return;
+        playbackService.pause();
         playing = false;
-        selectedItem.elapsed = mediaPlayer.getCurrentPosition();
+        selectedItem.elapsed = Math.min(playbackService.getCurrentPosition(), selectedItem.duration);
         enablePlayerButtons(true);
         updateListView();
     }
 
-    /** Releases the Media Player control and sets the app's playing state to false */
-    private void releasePlayer(){
-        if (mediaPlayer != null) {
-            if (playing) mediaPlayer.pause();
-            mediaPlayer.release();
-            mediaPlayer = null;
-        }
-        playing = false;
-    }
-
-    /** Returns true if the input file is supported by the media player.
-     *  Check https://developer.android.com/guide/topics/media/media-formats */
     private boolean isValidAudio(String folder, String fileName){
-        return (getDuration(folder, fileName) > 0); // Check if duration can be retrieved
+        return (getDuration(folder, fileName) > 0);
     }
 
-    /** Returns the duration of an audio file */
     private int getDuration(String folder, String file) {
         Uri uri = Uri.parse(makeFullPath(folder, file));
-        MediaMetadataRetriever mmr = new MediaMetadataRetriever();
-        try {
+
+        try (MediaMetadataRetriever mmr = new MediaMetadataRetriever()) {
             mmr.setDataSource(getApplicationContext(), uri);
             String durationStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-            return Integer.parseInt(durationStr);
-        }
-        catch (Exception ex) {
+            return (durationStr != null) ? Integer.parseInt(durationStr) : -1;
+        } catch (Exception ex) {
             return -1;
         }
     }
 
-    /** Returns a string with the progress details */
     private String getProgressInfo(Item item){
-        int progress = (int)((double)item.elapsed / (double)item.duration * 100);
+        int progress = (item.duration > 0) ? (int)((double)item.elapsed / (double)item.duration * 100) : 0;
         return getFormattedTime(item.elapsed) + " / " +
                 getFormattedTime(item.duration) +
                 String.format(Locale.ROOT, "   (%d%%)", progress);
     }
 
-    /** Converts a number of milliseconds into a string of format HH:MM:SS */
     private String getFormattedTime(int millis) {
         return String.format(Locale.ROOT, "%02d:%02d:%02d",
                 TimeUnit.MILLISECONDS.toHours(millis),
@@ -676,66 +723,60 @@ public class MainActivity extends AppCompatActivity {
                         TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis)));
     }
 
-    /** Returns the current time in seconds */
     private long getTimeStamp(){
         return System.currentTimeMillis()/1000;
     }
 
-    /** Returns true if a file exists */
     private boolean checkFileExists(String path) {
         return new File(path).exists();
     }
 
-    /** Extracts the folder from a full path */
     private String extractFolder(String fullPath) {
-        return fullPath.substring(0,fullPath.lastIndexOf("/"));
+        int index = fullPath.lastIndexOf("/");
+        return (index != -1) ? fullPath.substring(0, index) : fullPath;
     }
 
-    /** Returns a full path combining a folder and a file name */
     private String makeFullPath(String folder, String file) {
         return folder + "/" + file;
     }
 
-    /** Returns a path without the root folder, if present.
-     * Simplifies the paths of files placed in the internal storage.
-     * Files placed in the external storage will show with its full path. */
     private String removeRootFolder(String path){
         return path.replace(Environment.getExternalStorageDirectory().toString(), "");
     }
 
-    /** Updates the progress of the current audio file and the seek bar */
-    private Runnable updateProgress = new Runnable() {
+    private final Runnable updateProgress = new Runnable() {
         public void run() {
-            if (mediaPlayer != null && selectedItem != null) {
-                selectedItem.elapsed = mediaPlayer.getCurrentPosition();
+            if (playbackService != null && selectedItem != null) {
+                selectedItem.elapsed = Math.min(playbackService.getCurrentPosition(), selectedItem.duration);
                 txtElapsed.setText(getFormattedTime(selectedItem.elapsed));
                 if (selectedItem.txtProgress != null) {
                     selectedItem.txtProgress.setText(getProgressInfo(selectedItem));
                 }
                 seekbar.setProgress(selectedItem.elapsed);
             }
-            myHandler.postDelayed(this, 100);
+            if (playing) {
+                myHandler.postDelayed(this, 100);
+            }
         }
     };
 
-    /** Stops playing when the user presses the back key.*/
-    @Override
-    public void onBackPressed(){
-        if (playing) pause();
-        unregisterReceiver(receiver);
-        super.onBackPressed();
-    }
-
-    /** Enables the controls only if the Read/write permission is granted*/
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
-        if (requestCode == REQUEST_READWRITE_STORAGE) {
-            if ((grantResults.length > 0) && (grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                showControls(true);
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_STORAGE_PERMISSION) {
+            boolean allGranted = true;
+            for (int res : grantResults) {
+                if (res != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+            if (allGranted) showControls(true);
+            else {
+                Toast.makeText(this, "Permission is required to list and play audio files", Toast.LENGTH_LONG).show();
             }
         }
     }
 }
-

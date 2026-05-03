@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Backup the file list -->
+    <include domain="file" path="ResumePlayer.txt" />
+    <!-- Backup the emergency playback positions -->
+    <include domain="sharedpref" path="ResumePlayerPrefs.xml" />
+</full-backup-content>

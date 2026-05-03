@@ -1,10 +1,19 @@
-*.iml
-.gradle
+# Build artifacts
+.gradle/
+/build/
+/captures/
 /local.properties
-/.idea/workspace.xml
-/.idea/libraries
+
+# IDE - Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+*.apk
+
+# OS generated files
 .DS_Store
-/build
-/captures
-/.idea/caches/build_file_checksums.ser
-/.idea/vcs.xml
+Thumbs.db
+
+
+

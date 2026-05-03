@@ -5,4 +5,25 @@
 
     </style>
 
+    <!-- Custom theme for the File Dialog -->
+    <style name="FileDialogTheme" parent="Theme.AppCompat.Dialog.Alert">
+        <!-- Background color -->
+        <item name="android:windowBackground">#202020</item>
+        <!-- Title text style -->
+        <item name="android:windowTitleStyle">@style/FileDialogTitle</item>
+    </style>
+
+    <style name="FileDialogTitle" parent="TextAppearance.AppCompat.Title">
+        <!-- Title color -->
+        <item name="android:textColor">#ff9100</item>
+    </style>
+
+    <!-- Custom theme for general Alert Dialogs -->
+    <style name="AlertDialogTheme" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">#202020</item>
+        <item name="android:windowTitleStyle">@style/FileDialogTitle</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#CCCCCC</item>
+    </style>
+
 </resources>

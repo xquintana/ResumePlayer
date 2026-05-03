@@ -3,14 +3,20 @@ package com.xq.ResumePlayer;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
-import android.content.DialogInterface;
+import android.graphics.Color;
 import android.os.Environment;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 /** Allows to browse and select an audio file from storage. */
@@ -21,7 +27,7 @@ class FileDialog {
     private String[] fileList; // Files contained in the current location
 
     /** List of listeners to be notified when a file is selected */
-    private ListenerList<FileSelectedListener> fileListenerList = new ListenerList<>();
+    private final ListenerList<FileSelectedListener> fileListenerList = new ListenerList<>();
 
     /** true when the current browsing location is at the top level and we must select a
      * storage volume (internal/external) instead of a folder */
@@ -36,8 +42,7 @@ class FileDialog {
 
     /** Creates a dialog that browses the storage contents */
     private Dialog createFileDialog() {
-        Dialog dialog;
-        AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity, R.style.AlertDialogTheme);
         String title = currentPath.getPath();
 
         if (selectStorage) { // Select a storage rather than a file
@@ -45,23 +50,42 @@ class FileDialog {
         }
 
         builder.setTitle(title);
-        builder.setItems(fileList, new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int which) {
-                File chosenFile = getChosenFile(fileList[which]);
-                if (!chosenFile.exists()) {
-                    Toast.makeText(activity.getApplicationContext(), "NOT EXISTS", Toast.LENGTH_SHORT).show();
+
+        // Use a custom ArrayAdapter to color folders
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(activity,
+                R.layout.row_file, fileList) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                TextView textView = view.findViewById(android.R.id.text1);
+                String fileName = getItem(position);
+                if (fileName != null) {
+                    File file = getChosenFile(fileName);
+                    if (file.isDirectory()) {
+                        textView.setTextColor(Color.parseColor("#ff9100"));
+                    } else {
+                        textView.setTextColor(Color.WHITE);
+                    }
                 }
-                else if (chosenFile.isDirectory()) {
-                    fileList = getFileList(chosenFile);
-                    dialog.cancel();
-                    dialog.dismiss();
-                    showDialog();
-                } else fireFileSelectedEvent(chosenFile);
+                return view;
             }
+        };
+
+        builder.setAdapter(adapter, (dialog, which) -> {
+            File chosenFile = getChosenFile(fileList[which]);
+            if (!chosenFile.exists()) {
+                Toast.makeText(activity.getApplicationContext(), "NOT EXISTS", Toast.LENGTH_SHORT).show();
+            }
+            else if (chosenFile.isDirectory()) {
+                fileList = getFileList(chosenFile);
+                dialog.cancel();
+                dialog.dismiss();
+                showDialog();
+            } else fireFileSelectedEvent(chosenFile);
         });
 
-        dialog = builder.show();
-        return dialog;
+        return builder.create();
     }
 
     /** Creates and displays the dialog */
@@ -78,13 +102,26 @@ class FileDialog {
             if (dir != null) {
                 String mPath = dir.getAbsolutePath();
                 int end = mPath.indexOf("/Android");
-                mPath = mPath.substring(0, end);
-                mainPaths.add(mPath);
+                if (end != -1) {
+                    mPath = mPath.substring(0, end);
+                    mainPaths.add(mPath);
+                }
             }
         }
         String[] paths = new String[mainPaths.size()];
         paths = mainPaths.toArray(paths);
         return paths;
+    }
+
+    /** Returns true if the file name has a supported audio extension */
+    private boolean isAudioFile(String name) {
+        if (Utils.isAndroid13orHigher()) {
+            return true; // Assume that in versions 13+, only audio files can be selected.
+        }
+        String lower = name.toLowerCase();
+        return lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".ogg") ||
+                lower.endsWith(".m4a") || lower.endsWith(".aac") || lower.endsWith(".flac") ||
+                lower.endsWith(".opus") || lower.endsWith(".wma");
     }
 
     /** Returns the list of files contained in the input path */
@@ -105,13 +142,24 @@ class FileDialog {
             else {
                 // Add the files and folders found in current path
                 if (parent != null) fileNames.add(PARENT_DIR);
-                Collections.addAll(fileNames,children);
-                Collections.sort(fileNames, new Comparator<String>() {
-                    @Override
-                    public int compare(String s1, String s2) {
-                        return s1.compareToIgnoreCase(s2);
+
+                List<String> dirs = new ArrayList<>();
+                List<String> files = new ArrayList<>();
+
+                for (String child : children) {
+                    File file = new File(path, child);
+                    if (file.isDirectory()) {
+                        dirs.add(child);
+                    } else if (isAudioFile(child)) {
+                        files.add(child);
                     }
-                });
+                }
+
+                Collections.sort(dirs, String::compareToIgnoreCase);
+                Collections.sort(files, String::compareToIgnoreCase);
+
+                fileNames.addAll(dirs);
+                fileNames.addAll(files);
             }
         }
         return fileNames.toArray(new String[]{});
@@ -141,17 +189,13 @@ class FileDialog {
 
     /** Notifies the listeners that a file has been selected */
     private void fireFileSelectedEvent(final File file) {
-        fileListenerList.fireEvent(new ListenerList.FireHandler<FileSelectedListener>() {
-            public void fireEvent(FileSelectedListener listener) {
-                listener.fileSelected(file);
-            }
-        });
+        fileListenerList.fireEvent(listener -> listener.fileSelected(file));
     }
 }
 
 /** Used to send an event to the main activity when a file is selected */
 class ListenerList<L> {
-    private List<L> listenerList = new ArrayList<>();
+    private final List<L> listenerList = new ArrayList<>();
     interface FireHandler<L> {
         void fireEvent(L listener);
     }

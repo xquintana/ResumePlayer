@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
@@ -9,28 +8,30 @@
     android:paddingRight="8dp"
     android:paddingTop="0dp"
     android:paddingBottom="8dp"
+    android:background="#000000"
     tools:context=".MainActivity">
 
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="40dp"
         android:layout_margin="0dp"
         android:background="#1b14a7"
         android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:padding="0dp">
 
         <TextView
             android:layout_width="wrap_content"
-            android:layout_height="35dp"
-            android:paddingEnd="10dp"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-smallcaps"
             android:paddingStart="10dp"
+            android:paddingEnd="10dp"
             android:text="@string/app_name"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:textColor="#6aa3f5"
             android:textSize="18sp"
-            android:textStyle="bold"
-            android:typeface="normal" />
+            android:textStyle="bold" />
 
         <View
             android:layout_width="0dp"
@@ -38,50 +39,60 @@
             android:layout_weight="1" />
 
         <Button
+            android:id="@+id/btBoost"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginEnd="40dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:fontFamily="sans-serif-light"
+            android:gravity="center"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="@string/boost_off"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Button
             android:id="@+id/btAdd"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:layout_margin="0dp"
-            android:padding="0dp"
+            android:layout_width="36dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackground"
             android:text="@string/add"
-            android:textColor="#000000"
-            android:textSize="15sp"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
             android:textStyle="bold"
-            android:typeface="monospace" />
+            android:gravity="center" />
 
         <Button
             android:id="@+id/btRemove"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:layout_margin="0dp"
-            android:padding="0dp"
+            android:layout_width="36dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackground"
             android:text="@string/remove"
-            android:textColor="#000000"
-            android:textSize="15sp"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
             android:textStyle="bold"
-            android:typeface="monospace" />
+            android:gravity="center" />
     </LinearLayout>
 
-    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:tools="http://schemas.android.com/tools"
-        android:layout_width="wrap_content"
+    <RelativeLayout
+        android:id="@+id/playbackInfo"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="0dp"
-        android:paddingLeft="0dp"
-        android:paddingRight="0dp"
         android:paddingTop="15dp"
-        tools:context=".MainActivity">
+        android:paddingBottom="10dp">
 
         <TextView
             android:id="@+id/textAudioName"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_alignParentTop="true"
             android:layout_centerHorizontal="true"
             android:layout_marginBottom="5dp"
-            android:fadeScrollbars="true"
+            android:gravity="center"
             android:minLines="2"
             android:text="@string/blank"
+            android:textColor="#FFFFFF"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:textStyle="bold" />
 
@@ -91,10 +102,9 @@
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
             android:layout_below="@+id/textAudioName"
-            android:gravity="center_vertical"
             android:text="@string/start_time"
-            android:textAppearance="?android:attr/textAppearanceSmall"
-            android:textSize="12sp" />
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/textDuration"
@@ -103,92 +113,85 @@
             android:layout_alignParentEnd="true"
             android:layout_alignTop="@+id/textElapsed"
             android:text="@string/end_time"
-            android:textAppearance="?android:attr/textAppearanceSmall"
-            android:textSize="12sp" />
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
 
         <SeekBar
             android:id="@+id/seekBar"
-            android:layout_width="fill_parent"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/textElapsed"
-            android:layout_marginBottom="3dp"
-            android:layout_marginLeft="0dp"
-            android:layout_marginRight="0dp"
-            android:layout_marginTop="3dp" />
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp" />
     </RelativeLayout>
 
     <LinearLayout
         android:id="@+id/controls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="0dp"
         android:orientation="horizontal"
-        android:baselineAligned="false"
         android:gravity="center"
-        android:padding="5dp"
-        style="?android:attr/buttonBarStyle" >
+        android:padding="5dp">
 
         <Button
             android:id="@+id/btPrevious"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="45dp"
-            android:layout_height="40dp"
-            android:padding="0dp"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:background="?android:attr/selectableItemBackground"
             android:text="@string/previous"
-            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
         <Button
             android:id="@+id/btStepBack"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="45dp"
-            android:layout_height="40dp"
-            android:padding="0dp"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:background="?android:attr/selectableItemBackground"
             android:text="@string/step_back"
-            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
         <Button
             android:id="@+id/btPlay"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="45dp"
-            android:layout_height="40dp"
-            android:layout_marginLeft="5dp"
-            android:layout_marginRight="5dp"
-            android:padding="0dp"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:background="?android:attr/selectableItemBackground"
             android:text="@string/play"
-            android:textAlignment="center"
-            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
         <Button
             android:id="@+id/btStepForward"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="45dp"
-            android:layout_height="40dp"
-            android:padding="0dp"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:background="?android:attr/selectableItemBackground"
             android:text="@string/step_forward"
-            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
         <Button
             android:id="@+id/btNext"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="45dp"
-            android:layout_height="40dp"
-            android:padding="0dp"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:background="?android:attr/selectableItemBackground"
             android:text="@string/next"
-            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
             android:textStyle="bold" />
     </LinearLayout>
 
     <ScrollView
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content">
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
         <LinearLayout
-            android:orientation="vertical"
-            android:layout_width="fill_parent"
+            android:id="@+id/audioList"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:id="@+id/audioList" />
+            android:orientation="vertical" />
     </ScrollView>
 </LinearLayout>
