@@ -43,7 +43,7 @@ No personal data is collected or modified. Access is used strictly for browsing 
 * **Build SDK:** Android 14.0 (Upside Down Cake) — API 34
 
 ## Install
-A debug, unsigned APK can be downloaded from the [Releases section](./releases).   
+A debug, unsigned APK can be downloaded from the [Releases section](https://github.com/xquintana/ResumePlayer/releases).  
 You will need to temporarily enable the *Unknown Sources* option in Android's security settings.  
 
 ## License
